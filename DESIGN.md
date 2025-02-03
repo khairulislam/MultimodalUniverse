@@ -147,6 +147,29 @@ We zero-pad multi-band time series data (e.g., for time domain astrophysics) to 
 }
 ```
 
+### Segmentation Maps
+
+The organization of the data is intended to allow segmentation maps to exist for any data structure. Meta data is included, as well as the source data for which the segmentaitons were developed (i.e. false color images of galaxies). The dimensions of the source data define the dimensions of the segmentation maps (segmentation arrays). An exmample for a galaxy segmentation map (from the `gz3d` [dataset](./scripts/gz3d/README.md)) looks like:
+
+  ```python
+    {
+        'total_classifications': 60,
+        'healpix': 1823,
+        'ra': 357.58013916,
+        'dec': -11.06652546,
+        'image': array(512, 512, 3),
+        'scale': 2.75000002e-05,
+        'segmentation': {
+            'class': ['center', 'star', 'spiral', 'bar'],
+            'vote_fraction': [-1.        , -1.        ,  0.75      ,  0.51666667],
+            'array': array(4, 512, 512)
+            },
+        'object_id': '1-100017'
+    }
+  ```
+
+Our main condition for segmentation maps, is that the data can be _mapped back_ to the relevant survey. Specifically, the `segmentation.array` sizes and pixel scale must match the relevant data from which the maps were derived. For example, the spatial coordinates of the pixels in the segmentation map should directly match the spatial coordinates of the corresponding pixels in the relevant survey, (which also implies that respective arrays are oriented in the same way).
+
 ## Illustrated HuggingFace Dataset generator
 
 The easiest way to add data to the Multimodal Universe is via a [HuggingFace-style dataset generator](https://huggingface.co/docs/datasets/image_dataset#loading-script). Here we'll briefly go over the main parts of the generator, using the [DESI dataloading script](https://github.com/MultimodalUniverse/MultimodalUniverse/blob/main/scripts/desi/desi.py) as an example.
