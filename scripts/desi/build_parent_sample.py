@@ -88,6 +88,10 @@ def processing_fn(args):
 
     tgt_ids = np.array(combined_spectra.target_ids())[reordering_idx]
 
+    snr_b = np.array(spec.scores['MEDIAN_COADD_SNR_B'])[reordering_idx].astype(np.float32)
+    snr_r = np.array(spec.scores['MEDIAN_COADD_SNR_R'])[reordering_idx].astype(np.float32)
+    snr_z = np.array(spec.scores['MEDIAN_COADD_SNR_Z'])[reordering_idx].astype(np.float32)
+
     # Get an averaged estimated Gaussian line spread function
     # TODO: Actually properly estimate the line spread function of each spectrum
     lsf = res.mean(axis=-1).mean(axis=0)
@@ -119,8 +123,11 @@ def processing_fn(args):
             shape=[len(tgt_ids), len(wavelength)], dtype=np.float32
         ),  # The sigma of the estimated Gaussian line spread function, in pixel units
         "spectrum_lsf": res,
+        "MEDIAN_COADD_SNR_B": snr_b,
+        "MEDIAN_COADD_SNR_R": snr_r,
+        "MEDIAN_COADD_SNR_Z": snr_z,
     }
-
+    
 
 def save_in_standard_format(args):
     """This function takes care of iterating through the different input files
