@@ -1,12 +1,13 @@
-import os
 import argparse
-import numpy as np
-from astropy.table import Table, join
-from scipy.optimize import curve_fit
+import os
+
 import desispec.io
-from desispec import coaddition
 import h5py
 import healpy as hp
+import numpy as np
+from astropy.table import Table, join
+from desispec import coaddition
+from scipy.optimize import curve_fit
 from tqdm.contrib.concurrent import process_map
 
 # Set the log level to warning to avoid too much output
@@ -88,6 +89,16 @@ def processing_fn(args):
 
     tgt_ids = np.array(combined_spectra.target_ids())[reordering_idx]
 
+    snr_b = np.array(combined_spectra.scores["MEDIAN_COADD_SNR_B"])[
+        reordering_idx
+    ].astype(np.float32)
+    snr_r = np.array(combined_spectra.scores["MEDIAN_COADD_SNR_R"])[
+        reordering_idx
+    ].astype(np.float32)
+    snr_z = np.array(combined_spectra.scores["MEDIAN_COADD_SNR_Z"])[
+        reordering_idx
+    ].astype(np.float32)
+
     # Get an averaged estimated Gaussian line spread function
     # TODO: Actually properly estimate the line spread function of each spectrum
     lsf = res.mean(axis=-1).mean(axis=0)
@@ -119,6 +130,9 @@ def processing_fn(args):
             shape=[len(tgt_ids), len(wavelength)], dtype=np.float32
         ),  # The sigma of the estimated Gaussian line spread function, in pixel units
         "spectrum_lsf": res,
+        "MEDIAN_COADD_SNR_B": snr_b,
+        "MEDIAN_COADD_SNR_R": snr_r,
+        "MEDIAN_COADD_SNR_Z": snr_z,
     }
 
 
@@ -169,9 +183,10 @@ def save_in_standard_format(args):
     catalog = join(catalog, spectra, keys="TARGETID", join_type="inner")
 
     # Making sure we didn't lose anyone
-    assert len(catalog) == len(spectra), \
-        "There was an error in the join operation " \
+    assert len(catalog) == len(spectra), (
+        "There was an error in the join operation "
         f"(len(catalog)={len(catalog)}, len(spectra)={len(spectra)})"
+    )
 
     # Save all columns to disk in HDF5 format
     with h5py.File(output_filename, "w") as hdf5_file:
