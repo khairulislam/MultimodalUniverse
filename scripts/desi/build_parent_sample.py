@@ -1,12 +1,13 @@
-import os
 import argparse
-import numpy as np
-from astropy.table import Table, join
-from scipy.optimize import curve_fit
+import os
+
 import desispec.io
-from desispec import coaddition
 import h5py
 import healpy as hp
+import numpy as np
+from astropy.table import Table, join
+from desispec import coaddition
+from scipy.optimize import curve_fit
 from tqdm.contrib.concurrent import process_map
 
 # Set the log level to warning to avoid too much output
@@ -14,11 +15,27 @@ os.environ["DESI_LOGLEVEL"] = "WARNING"
 
 _healpix_nside = 16
 
-# Despite appearing in the catalog:
-# /dr1/spectro/redux/iron/zcatalog/v1/zall-pix-iron.fits"
-# the following files of the form:
-# /dr1/spectro/redux/iron/healpix/{survey}/{program}/{pix_group}/{healpix}/coadd-{survey}-{program}-{healpix}.fits"
-# do not exist on DESI's servers (at the time of writing: 07/05/25).
+
+"""
+Despite appearing in the file:
+    <https://data.desi.lbl.gov/public/dr1/spectro/redux/iron/healpix/tilepix.fits>
+the following files of the form:
+    `/dr1/spectro/redux/iron/healpix/{survey}/{program}/{pix_group}/{healpix}/
+    coadd-{survey}-{program}-{healpix}.fits`
+do not exist on DESI's servers (at the time of writing: 21 Aug 25). It is therefore
+necessary to filter them out from the entries in tilepix.fits to prevent this script
+from attempting to process non-existent files.
+
+The reason for the discrepancy between the appearance of these files in tilepix.fits but
+not on DESI's servers is discussed here:
+    <https://github.com/MultimodalUniverse/MultimodalUniverse/issues/175>
+and here:
+    <https://github.com/desihub/desispec/issues/2267>
+These observations were collected but had quality issues so were not presented in the
+final catalogs, though they are preserved in tilepix.fits. `tilepix.fits` should be
+considered as superset of what exists on DESI's servers since it records observations
+made rather than observations presented.
+"""
 BAD_HANDLES = {
     "bright": [9836, 4802, 4561, 4730],
     "dark": [26535, 15051, 10844, 9913],
@@ -72,6 +89,16 @@ def processing_fn(args):
 
     tgt_ids = np.array(combined_spectra.target_ids())[reordering_idx]
 
+    snr_b = np.array(combined_spectra.scores["MEDIAN_COADD_SNR_B"])[
+        reordering_idx
+    ].astype(np.float32)
+    snr_r = np.array(combined_spectra.scores["MEDIAN_COADD_SNR_R"])[
+        reordering_idx
+    ].astype(np.float32)
+    snr_z = np.array(combined_spectra.scores["MEDIAN_COADD_SNR_Z"])[
+        reordering_idx
+    ].astype(np.float32)
+
     # Get an averaged estimated Gaussian line spread function
     # TODO: Actually properly estimate the line spread function of each spectrum
     lsf = res.mean(axis=-1).mean(axis=0)
@@ -103,6 +130,9 @@ def processing_fn(args):
             shape=[len(tgt_ids), len(wavelength)], dtype=np.float32
         ),  # The sigma of the estimated Gaussian line spread function, in pixel units
         "spectrum_lsf": res,
+        "MEDIAN_COADD_SNR_B": snr_b,
+        "MEDIAN_COADD_SNR_R": snr_r,
+        "MEDIAN_COADD_SNR_Z": snr_z,
     }
 
 
@@ -153,9 +183,10 @@ def save_in_standard_format(args):
     catalog = join(catalog, spectra, keys="TARGETID", join_type="inner")
 
     # Making sure we didn't lose anyone
-    assert len(catalog) == len(spectra), \
-        "There was an error in the join operation " \
+    assert len(catalog) == len(spectra), (
+        "There was an error in the join operation "
         f"(len(catalog)={len(catalog)}, len(spectra)={len(spectra)})"
+    )
 
     # Save all columns to disk in HDF5 format
     with h5py.File(output_filename, "w") as hdf5_file:
